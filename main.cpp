@@ -1,11 +1,11 @@
 #include <GL/glew.h>
 #include <GL/freeglut.h>
-#include <stdio.h> // Include for fprintf and stderr
 
 #include <cmath>
 #include <cstdlib>
 #include <vector>
 #include <ctime> // for random snowflakes
+#include <stdio.h> // fprintf and stderr
 
 using std::vector;
 using std::abs;
@@ -513,9 +513,48 @@ void drawStylizedSkyBackground() {
     drawCloud(700, 420, 25);
 }
 
+float sunRotationAngle = 0.0f;
+
+void drawPixelatedSun(float x, float y, float size) {
+    float pixelSize = size / 8.0f;
+    float colors[4][3] = {
+        {1.0f, 1.0f, 0.0f}, // Yellow
+        {1.0f, 0.9f, 0.0f}, // Light Orange
+        {1.0f, 0.8f, 0.0f}, // Orange
+        {1.0f, 0.7f, 0.0f}  // Dark Orange
+    };
+
+    glPushMatrix();
+    glTranslatef(x, y, 0.0f);
+    glRotatef(sunRotationAngle, 0.0f, 0.0f, 1.0f);
+    glTranslatef(-x, -y, 0.0f);
+
+    for (int i = -6; i < 6; ++i) {
+        for (int j = -6; j < 6; ++j) {
+            int distance = abs(i) + abs(j);
+            int colorIndex = distance < 3 ? 0 : (distance < 5 ? 1 : (distance < 7 ? 2 : 3));
+            drawRectangle(x + i * pixelSize, y + j * pixelSize, pixelSize, pixelSize, colors[colorIndex][0], colors[colorIndex][1], colors[colorIndex][2]);
+        }
+    }
+
+    glPopMatrix();
+}
+
+void updateSunRotation(int value) {
+    sunRotationAngle += 1.0f;
+    if (sunRotationAngle >= 360.0f) {
+        sunRotationAngle -= 360.0f;
+    }
+    glutPostRedisplay();
+    glutTimerFunc(16, updateSunRotation, 0);
+}
+
 void display() {
     glClear(GL_COLOR_BUFFER_BIT);
     drawStylizedSkyBackground();
+
+    // Draw the sun
+    drawPixelatedSun(700, 500, 75);
 
     updateHousePositions();
 
@@ -642,7 +681,7 @@ void init() {
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     initShaders(); // Initialize shaders
-    updateProjection();
+    updateProjection(); 
     srand(time(0)); // seed random number generator
     initSnowflakes(100); // initialize 100 snowflakes
     initCircleVBO(); // Initialize Circle VBO
@@ -661,6 +700,7 @@ int main(int argc, char ** argv) {
     glutKeyboardFunc(handleKeyboard);
     glutMouseFunc(mouseClick);
     glutTimerFunc(16, updateClamp, 0);
+    glutTimerFunc(16, updateSunRotation, 0);
     glutMainLoop();
     return 0;
 }
