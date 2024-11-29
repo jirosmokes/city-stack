@@ -514,6 +514,7 @@ void drawStylizedSkyBackground() {
 }
 
 float sunRotationAngle = 0.0f;
+float sunOrbitRadius = 50.0f; // Reduce the orbit radius for smaller movement
 
 void drawPixelatedSun(float x, float y, float size) {
     float pixelSize = size / 8.0f;
@@ -526,7 +527,7 @@ void drawPixelatedSun(float x, float y, float size) {
 
     glPushMatrix();
     glTranslatef(x, y, 0.0f);
-    glRotatef(sunRotationAngle, 0.0f, 0.0f, 1.0f);
+    glRotatef(sunRotationAngle, 0.0f, 0.0f, 1.0f); // Rotate the sun itself
     glTranslatef(-x, -y, 0.0f);
 
     for (int i = -6; i < 6; ++i) {
@@ -541,20 +542,54 @@ void drawPixelatedSun(float x, float y, float size) {
 }
 
 void updateSunRotation(int value) {
-    sunRotationAngle += 1.0f;
+    sunRotationAngle += 1.0f; // Decrease the rotation speed for smaller movements
     if (sunRotationAngle >= 360.0f) {
-        sunRotationAngle -= 360.0f;
+        sunRotationAngle = 0.0f;
     }
     glutPostRedisplay();
     glutTimerFunc(16, updateSunRotation, 0);
+}
+
+void drawText(float x, float y, const char* text) {
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, windowWidth, 0, windowHeight);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glRasterPos2f(x, y);
+    while (*text) {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *text);
+        text++;
+    }
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+}
+
+void drawInstructions() {
+    glColor3f(0.0f, 0.0f, 0.0f); // Set text color to black
+    drawText(10.0f, windowHeight - 20.0f, "Controls:");
+    drawText(10.0f, windowHeight - 40.0f, "Left Click: Drop House");
+    drawText(10.0f, windowHeight - 60.0f, "+: Zoom In");
+    drawText(10.0f, windowHeight - 80.0f, "-: Zoom Out");
+    drawText(10.0f, windowHeight - 100.0f, "Mouse Scroll: Zoom In/Out");
 }
 
 void display() {
     glClear(GL_COLOR_BUFFER_BIT);
     drawStylizedSkyBackground();
 
+    // Calculate sun's new position in the top right corner
+    float sunX = windowWidth - 100 + sunOrbitRadius * cos(sunRotationAngle * M_PI / 180.0f);
+    float sunY = windowHeight - 100 + sunOrbitRadius * sin(sunRotationAngle * M_PI / 180.0f);
+
     // Draw the sun
-    drawPixelatedSun(700, 500, 75);
+    drawPixelatedSun(sunX, sunY, 75);
 
     updateHousePositions();
 
@@ -576,10 +611,13 @@ void display() {
     drawChristmasTree(700, 100); // draw christmas tree on the right
     drawChristmasTree(750, 100); // draw christmas tree on the right
 
+    drawInstructions(); // Draw the instructions
+
     glutSwapBuffers();
 }
 
 float zoomFactor = 1.0f;
+const float minZoomFactor = 0.5f; // Minimum zoom factor to avoid seeing the black background
 
 void updateProjection() {
     glUseProgram(shaderProgram); // Use the shader program
@@ -601,7 +639,17 @@ void handleKeyboard(unsigned char key, int x, int y) {
     if (key == '+') {
         zoomFactor *= 1.1f;
     } else if (key == '-') {
-        zoomFactor *= 0.9f;
+        zoomFactor = std::max(zoomFactor * 0.9f, minZoomFactor);
+    }
+    updateProjection();
+    glutPostRedisplay();
+}
+
+void handleMouseScroll(int button, int dir, int x, int y) {
+    if (dir > 0) {
+        zoomFactor *= 1.1f;
+    } else {
+        zoomFactor = std::max(zoomFactor * 0.9f, minZoomFactor);
     }
     updateProjection();
     glutPostRedisplay();
@@ -688,6 +736,9 @@ void init() {
     initRectangleVBO(); // Initialize Rectangle VBO
     initBackgroundVBO(); // Initialize Background VBO
     initGroundVBO(); // Initialize Ground VBO
+    glutMouseWheelFunc(handleMouseScroll); // Register mouse scroll handler
+    glutTimerFunc(16, updateSunRotation, 0); // Initialize sun rotation timer
+    glutFullScreen(); // Set the screen to fullscreen mode
 }
 
 int main(int argc, char ** argv) {
@@ -700,7 +751,6 @@ int main(int argc, char ** argv) {
     glutKeyboardFunc(handleKeyboard);
     glutMouseFunc(mouseClick);
     glutTimerFunc(16, updateClamp, 0);
-    glutTimerFunc(16, updateSunRotation, 0);
     glutMainLoop();
     return 0;
 }
