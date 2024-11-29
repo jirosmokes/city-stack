@@ -1,4 +1,6 @@
+#include <GL/glew.h>
 #include <GL/freeglut.h>
+#include <stdio.h> // Include for fprintf and stderr
 
 #include <cmath>
 #include <cstdlib>
@@ -10,28 +12,121 @@ using std::abs;
 
 const int windowWidth = 800;
 const int windowHeight = 600;
+GLuint circleVBO, circleVAO;
+const int numSegments = 50;
+GLuint shaderProgram;
 
-void drawCircle(float cx, float cy, float r, int numSegments, float rColor, float gColor, float bColor) {
-    glColor3f(rColor, gColor, bColor);
-    glBegin(GL_TRIANGLE_FAN);
-    glVertex2f(cx, cy);
+void initCircleVBO() {
+    // Prepare vertices for a circle (center + segments)
+    vector<float> circleVertices;
+    circleVertices.push_back(0.0f); // center x
+    circleVertices.push_back(0.0f); // center y
+    circleVertices.push_back(0.0f); // center z
+    circleVertices.push_back(1.0f); // Color R
+    circleVertices.push_back(1.0f); // Color G
+    circleVertices.push_back(1.0f); // Color B
+
     for (int i = 0; i <= numSegments; i++) {
         float angle = i * 2.0f * M_PI / numSegments;
-        float x = r * cos(angle);
-        float y = r * sin(angle);
-        glVertex2f(cx + x, cy + y);
+        float x = cos(angle);
+        float y = sin(angle);
+        circleVertices.push_back(x); // vertex x
+        circleVertices.push_back(y); // vertex y
+        circleVertices.push_back(0.0f); // vertex z
+        circleVertices.push_back(1.0f); // Color R
+        circleVertices.push_back(1.0f); // Color G
+        circleVertices.push_back(1.0f); // Color B
     }
-    glEnd();
+
+    // Generate VBO and VAO
+    glGenBuffers(1, &circleVBO);
+    glGenVertexArrays(1, &circleVAO);
+
+    glBindVertexArray(circleVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, circleVBO);
+    glBufferData(GL_ARRAY_BUFFER, circleVertices.size() * sizeof(float), circleVertices.data(), GL_STATIC_DRAW);
+
+    // Vertex attribute for position (x, y, z)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Vertex attribute for color (r, g, b)
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+void drawCircle(float cx, float cy, float r, int segments = 12, float rColor = 1.0f, float gColor = 1.0f, float bColor = 1.0f) {
+    glBindVertexArray(circleVAO);
+    glUseProgram(shaderProgram); // Use the shader program
+    glUniform3f(glGetUniformLocation(shaderProgram, "color"), rColor, gColor, bColor); // Set color uniform
+
+    float model[16] = {
+        r, 0.0f, 0.0f, 0.0f,
+        0.0f, r, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        cx, cy, 0.0f, 1.0f
+    };
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, model);
+
+    glDrawArrays(GL_TRIANGLE_FAN, 0, numSegments + 2); // Draw the circle
+
+    glBindVertexArray(0);
+    glUseProgram(0); // Unbind the shader program
+}
+
+GLuint rectVBO, rectVAO;
+
+void initRectangleVBO() {
+    // Define the vertices for a rectangle (2 triangles)
+    vector<float> rectVertices = {
+        0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,  // Bottom-left corner
+        1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,  // Bottom-right corner
+        1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f,  // Top-right corner
+        0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f   // Top-left corner
+    };
+
+    // Generate VBO and VAO
+    glGenBuffers(1, &rectVBO);
+    glGenVertexArrays(1, &rectVAO);
+
+    glBindVertexArray(rectVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, rectVBO);
+    glBufferData(GL_ARRAY_BUFFER, rectVertices.size() * sizeof(float), rectVertices.data(), GL_STATIC_DRAW);
+
+    // Vertex attribute for position (x, y)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Vertex attribute for color (r, g, b)
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 }
 
 void drawRectangle(float x, float y, float width, float height, float r, float g, float b) {
-    glColor3f(r, g, b);
-    glBegin(GL_QUADS);
-    glVertex2f(x, y);
-    glVertex2f(x + width, y);
-    glVertex2f(x + width, y + height);
-    glVertex2f(x, y + height);
-    glEnd();
+    glBindVertexArray(rectVAO);
+    glUseProgram(shaderProgram); // Use the shader program
+    glUniform3f(glGetUniformLocation(shaderProgram, "color"), r, g, b); // Set color uniform
+
+    float model[16] = {
+        width, 0.0f, 0.0f, 0.0f,
+        0.0f, height, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        x, y, 0.0f, 1.0f
+    };
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, model);
+
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4); // Draw the rectangle
+
+    glBindVertexArray(0);
+    glUseProgram(0); // Unbind the shader program
 }
 
 void drawWindow(float x, float y, float width, float height) {
@@ -83,7 +178,7 @@ void initSnowflakes(int numSnowflakes) {
 
 void drawSnowflake(float x, float y, float size) {
     glColor3f(1.0f, 1.0f, 1.0f);
-    drawCircle(x, y, size, 12, 1.0f, 1.0f, 1.0f);
+    drawCircle(x, y, size);
 }
 
 void updateSnowflakes() {
@@ -109,12 +204,24 @@ void drawBuilding(float x, float y, float width, float height, float r, float g,
 }
 
 void drawTriangle(float x, float y, float base, float height, float r, float g, float b) {
-    glColor3f(r, g, b);
+    glUseProgram(shaderProgram); // Use the shader program
+    glUniform3f(glGetUniformLocation(shaderProgram, "color"), r, g, b); // Set color uniform
+
+    float model[16] = {
+        base, 0.0f, 0.0f, 0.0f,
+        0.0f, height, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        x, y, 0.0f, 1.0f
+    };
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, model);
+
     glBegin(GL_TRIANGLES);
-    glVertex2f(x, y);
-    glVertex2f(x - base / 2, y - height);
-    glVertex2f(x + base / 2, y - height);
+    glVertex2f(0.0f, 0.0f);
+    glVertex2f(-0.5f, -1.0f);
+    glVertex2f(0.5f, -1.0f);
     glEnd();
+
+    glUseProgram(0); // Unbind the shader program
 }
 
 void drawChristmasTree(float x, float y) {
@@ -137,35 +244,55 @@ void drawCraneHook(float x, float y) {
     float hookHeight = 60.0f;
     float hookCurveRadius = 15.0f;
 
-    glColor3f(0.3f, 0.3f, 0.3f);
+    glUseProgram(shaderProgram); // Use the shader program
+
+    // Draw the line
+    glUniform3f(glGetUniformLocation(shaderProgram, "color"), 0.3f, 0.3f, 0.3f); // Set color uniform
+    float model[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        clampX + hookWidth / 2, y + hookHeight + 100.0f, 0.0f, 1.0f
+    };
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, model);
     glLineWidth(4);
     glBegin(GL_LINES);
-    glVertex2f(clampX + hookWidth / 2, y + hookHeight + 100.0f);
-    glVertex2f(clampX + hookWidth / 2, y + hookHeight);
+    glVertex2f(0.0f, 0.0f);
+    glVertex2f(0.0f, -100.0f);
     glEnd();
 
+    // Draw the hook body
+    glUniform3f(glGetUniformLocation(shaderProgram, "color"), 0.7f, 0.7f, 0.7f); // Set color uniform
+    model[12] = clampX;
+    model[13] = y;
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, model);
     glBegin(GL_POLYGON);
-    glColor3f(0.7f, 0.7f, 0.7f);
-    glVertex2f(clampX, y);
-    glColor3f(0.5f, 0.5f, 0.5f);
-    glVertex2f(clampX + hookWidth, y);
-    glVertex2f(clampX + hookWidth * 0.8f, y + hookHeight);
-    glVertex2f(clampX + hookWidth * 0.2f, y + hookHeight);
+    glVertex2f(0.0f, 0.0f);
+    glVertex2f(hookWidth, 0.0f);
+    glVertex2f(hookWidth * 0.8f, hookHeight);
+    glVertex2f(hookWidth * 0.2f, hookHeight);
     glEnd();
 
+    // Draw the hook curve
+    glUniform3f(glGetUniformLocation(shaderProgram, "color"), 0.4f, 0.4f, 0.4f); // Set color uniform
+    model[12] = clampX + hookWidth / 2;
+    model[13] = y + hookHeight;
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, model);
     glBegin(GL_TRIANGLE_FAN);
-    glColor3f(0.4f, 0.4f, 0.4f);
-    glVertex2f(clampX + hookWidth / 2, y + hookHeight);
+    glVertex2f(0.0f, 0.0f);
     for (int i = 0; i <= 20; ++i) {
         float angle = i * 2.0f * M_PI / 20;
         float xOffset = hookCurveRadius * cos(angle);
         float yOffset = hookCurveRadius * sin(angle);
-        glVertex2f(clampX + hookWidth / 2 + xOffset, y + hookHeight + yOffset);
+        glVertex2f(xOffset, yOffset);
     }
     glEnd();
 
+    // Draw the hook circles
     drawCircle(clampX + hookWidth * 0.2f, y + hookHeight * 0.7f, 3.0f, 12, 0.1f, 0.1f, 0.1f);
     drawCircle(clampX + hookWidth * 0.8f, y + hookHeight * 0.7f, 3.0f, 12, 0.1f, 0.1f, 0.1f);
+
+    glUseProgram(0); // Unbind the shader program
 }
 
 void updateClamp(int value) {
@@ -175,37 +302,6 @@ void updateClamp(int value) {
     }
     glutPostRedisplay();
     glutTimerFunc(16, updateClamp, 0);
-}
-
-float sunRotationAngle = 0.0f;
-
-void drawSunWithSpikes() {
-    glPushMatrix();
-    glTranslatef(700, 500, 0);
-    glRotatef(sunRotationAngle, 0.0f, 0.0f, 1.0f);
-    glTranslatef(-700, -500, 0);
-
-    drawCircle(700, 500, 50, 50, 1.0f, 1.0f, 0.0f);
-
-    float angleIncrement = 2.0f * M_PI / 24;
-    for (int i = 0; i < 24; i++) {
-        float angle = i * angleIncrement;
-        float x1 = 700 + 50 * cos(angle);
-        float y1 = 500 + 50 * sin(angle);
-        float spikeLength = (i % 2 == 0) ? 70 : 60;
-        float x2 = 700 + spikeLength * cos(angle);
-        float y2 = 500 + spikeLength * sin(angle);
-        float colorFactor = (float)i / 24.0f;
-
-        glColor3f(1.0f, 0.5f * colorFactor, 0.0f);
-        glLineWidth(2 + (i % 3));
-        glBegin(GL_LINES);
-        glVertex2f(x1, y1);
-        glVertex2f(x2, y2);
-        glEnd();
-    }
-
-    glPopMatrix();
 }
 
 struct FallingHouse {
@@ -307,15 +403,102 @@ void drawModernBuilding(float x, float y, float width, float height) {
     }
 }
 
+GLuint bgVBO, bgVAO;
+GLuint groundVBO, groundVAO;
+
+void initBackgroundVBO() {
+    // Define the vertices for the background (2 triangles forming a quad)
+    vector<float> bgVertices = {
+        0.0f, 0.0f, 0.0f, // Bottom-left corner
+        windowWidth, 0.0f, 0.0f, // Bottom-right corner
+        windowWidth, windowHeight, 0.0f, // Top-right corner
+        0.0f, windowHeight, 0.0f // Top-left corner
+    };
+
+    // Generate VBO and VAO
+    glGenBuffers(1, &bgVBO);
+    glGenVertexArrays(1, &bgVAO);
+
+    glBindVertexArray(bgVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, bgVBO);
+    glBufferData(GL_ARRAY_BUFFER, bgVertices.size() * sizeof(float), bgVertices.data(), GL_STATIC_DRAW);
+
+    // Vertex attribute for position (x, y, z)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+void initGroundVBO() {
+    // Define the vertices for the ground (2 triangles forming a quad)
+    vector<float> groundVertices = {
+        0.0f, 0.0f, 0.0f, // Bottom-left corner
+        windowWidth, 0.0f, 0.0f, // Bottom-right corner
+        windowWidth, 100.0f, 0.0f, // Top-right corner
+        0.0f, 100.0f, 0.0f // Top-left corner
+    };
+
+    // Generate VBO and VAO
+    glGenBuffers(1, &groundVBO);
+    glGenVertexArrays(1, &groundVAO);
+
+    glBindVertexArray(groundVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, groundVBO);
+    glBufferData(GL_ARRAY_BUFFER, groundVertices.size() * sizeof(float), groundVertices.data(), GL_STATIC_DRAW);
+
+    // Vertex attribute for position (x, y, z)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+void drawBackground() {
+    glBindVertexArray(bgVAO);
+    glUseProgram(shaderProgram); // Use the shader program
+    glUniform3f(glGetUniformLocation(shaderProgram, "color"), 0.7f, 0.9f, 1.0f); // Set color uniform
+
+    float model[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, model);
+
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4); // Draw the background
+
+    glBindVertexArray(0);
+    glUseProgram(0); // Unbind the shader program
+}
+
+void drawGround() {
+    glBindVertexArray(groundVAO);
+    glUseProgram(shaderProgram); // Use the shader program
+    glUniform3f(glGetUniformLocation(shaderProgram, "color"), 0.6f, 1.0f, 0.6f); // Set color uniform
+
+    float model[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, model);
+
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4); // Draw the ground
+
+    glBindVertexArray(0);
+    glUseProgram(0); // Unbind the shader program
+}
+
 void drawStylizedSkyBackground() {
-    glBegin(GL_QUADS);
-    glColor3f(0.7f, 0.9f, 1.0f);
-    glVertex2f(0, windowHeight);
-    glVertex2f(windowWidth, windowHeight);
-    glColor3f(0.2f, 0.4f, 0.7f);
-    glVertex2f(windowWidth, 10);
-    glVertex2f(0, 10);
-    glEnd();
+    drawBackground();
+    drawGround();
 
     drawModernBuilding(0, 100, 120, 300);
     drawModernBuilding(150, 100, 130, 350);
@@ -334,16 +517,6 @@ void display() {
     glClear(GL_COLOR_BUFFER_BIT);
     drawStylizedSkyBackground();
 
-    glBegin(GL_QUADS);
-    glColor3f(0.6f, 1.0f, 0.6f);
-    glVertex2f(0, 0);
-    glVertex2f(windowWidth, 0);
-    glColor3f(0.2f, 0.6f, 0.2f);
-    glVertex2f(windowWidth, 100);
-    glVertex2f(0, 100);
-    glEnd();
-
-    drawSunWithSpikes();
     updateHousePositions();
 
     for (auto & house: fallingHouses) {
@@ -351,11 +524,6 @@ void display() {
     }
 
     drawCraneHook(clampX, 450.0f);
-
-    sunRotationAngle += 0.5f;
-    if (sunRotationAngle >= 360.0f) {
-        sunRotationAngle -= 360.0f;
-    }
 
     updateSnowflakes(); // update snowflake positions
     drawSnowflakes(); // draw snowflakes
@@ -375,14 +543,19 @@ void display() {
 float zoomFactor = 1.0f;
 
 void updateProjection() {
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
+    glUseProgram(shaderProgram); // Use the shader program
     float left = 0;
     float right = windowWidth / zoomFactor;
     float bottom = 0;
     float top = windowHeight / zoomFactor;
-    glOrtho(left, right, bottom, top, -1.0, 1.0);
-    glMatrixMode(GL_MODELVIEW);
+    float projection[16] = {
+        2.0f / (right - left), 0.0f, 0.0f, 0.0f,
+        0.0f, 2.0f / (top - bottom), 0.0f, 0.0f,
+        0.0f, 0.0f, -1.0f, 0.0f,
+        -(right + left) / (right - left), -(top + bottom) / (top - bottom), 0.0f, 1.0f
+    };
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, projection);
+    glUseProgram(0); // Unbind the shader program
 }
 
 void handleKeyboard(unsigned char key, int x, int y) {
@@ -395,11 +568,87 @@ void handleKeyboard(unsigned char key, int x, int y) {
     glutPostRedisplay();
 }
 
+void checkShaderCompilation(GLuint shader) {
+    GLint success;
+    GLchar infoLog[512];
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(shader, 512, NULL, infoLog);
+        fprintf(stderr, "ERROR::SHADER::COMPILATION_FAILED\n%s\n", infoLog);
+    }
+}
+
+void checkProgramLinking(GLuint program) {
+    GLint success;
+    GLchar infoLog[512];
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        fprintf(stderr, "ERROR::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
+    }
+}
+
+void initShaders() {
+    // Vertex shader
+    const char* vertexShaderSource = R"(
+        #version 330 core
+        layout(location = 0) in vec3 aPos;
+        layout(location = 1) in vec3 aColor;
+        uniform mat4 model;
+        uniform mat4 projection;
+        void main() {
+            gl_Position = projection * model * vec4(aPos, 1.0);
+        }
+    )";
+
+    // Fragment shader
+    const char* fragmentShaderSource = R"(
+        #version 330 core
+        uniform vec3 color;
+        out vec4 FragColor;
+        void main() {
+            FragColor = vec4(color, 1.0);
+        }
+    )";
+
+    // Compile shaders and link program
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+    checkShaderCompilation(vertexShader);
+
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+    checkShaderCompilation(fragmentShader);
+
+    shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    checkProgramLinking(shaderProgram);
+
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+}
+
 void init() {
+    glewExperimental = GL_TRUE;
+    GLenum err = glewInit();
+    if (err != GLEW_OK) {
+        fprintf(stderr, "Error: %s\n", glewGetErrorString(err));
+        exit(1);
+    }
+
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    initShaders(); // Initialize shaders
     updateProjection();
     srand(time(0)); // seed random number generator
     initSnowflakes(100); // initialize 100 snowflakes
+    initCircleVBO(); // Initialize Circle VBO
+    initRectangleVBO(); // Initialize Rectangle VBO
+    initBackgroundVBO(); // Initialize Background VBO
+    initGroundVBO(); // Initialize Ground VBO
 }
 
 int main(int argc, char ** argv) {
